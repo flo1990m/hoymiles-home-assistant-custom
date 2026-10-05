@@ -155,7 +155,7 @@ class HoymilesHomeClient:
         """Return raw inverter realtime indicators (Hoymiles indicator type 6)."""
         await self.async_ensure_login()
         response = await self._json(
-            f"{DATA_BASE_URL}/pvmc/api/0/station_data/select_real_indicators_data",
+            f"{DATA_BASE_URL}/pvm-data/api/0/indicators/data/select_real_indicators_data",
             {"sid": station_id, "type": 6},
         )
         data = self._unwrap(response)
@@ -405,6 +405,7 @@ class HoymilesHomeClient:
     async def async_battery_settings(self, station_id: int) -> dict[str, Any]:
         """Read battery settings, with a HiBattery-addressed fallback."""
         await self.async_ensure_login()
+        work_mode_error: HoymilesConnectionError | None = None
         try:
             return await self._async_work_mode_settings(station_id)
         except HoymilesConnectionError as work_mode_error:
