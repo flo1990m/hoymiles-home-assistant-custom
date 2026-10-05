@@ -56,20 +56,6 @@ def _calculated_energy(key: str) -> Callable[[dict[str, Any]], Any]:
     return lambda data: _number(data.get("battery_energy", {}).get(key))
 
 
-def _inverter_indicator(key: str) -> Callable[[dict[str, Any]], Any]:
-    """Return a numeric value from the inverter indicator list."""
-    def value_fn(data: dict[str, Any]) -> float | int | None:
-        indicators = data.get("inverter_indicators", {}).get("list", [])
-        if not isinstance(indicators, list):
-            return None
-        for item in indicators:
-            if isinstance(item, dict) and item.get("key") == key:
-                return _number(item.get("val"))
-        return None
-
-    return value_fn
-
-
 def _pv_power(data: dict[str, Any]) -> float | int | None:
     power = data.get("live", {}).get("power", {})
     value = _number(power.get("pv2"))
@@ -396,7 +382,11 @@ class HoymilesInverterTemperatureSensor(
 
     @property
     def native_value(self):
-        return _inverter_indicator("inv_tin")(self.coordinator.data or {})
+        return _number(
+            (self.coordinator.data or {})
+            .get("inverter_values", {})
+            .get("MI_TEMPERATURE")
+        )
 
 
 class HoymilesModuleSensor(CoordinatorEntity[HoymilesHomeCoordinator], SensorEntity):

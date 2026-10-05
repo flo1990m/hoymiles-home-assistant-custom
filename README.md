@@ -1,18 +1,13 @@
-# Hoymiles S-Miles Home Custom
+# Hoymiles S-Miles Home – Florian custom build
 
-Personal Home Assistant integration based on Phil-0805/hoymiles-home-assistant.
+Custom Home Assistant build based on `Phil-0805/hoymiles-home-assistant`.
 
-This repository keeps the original `hoymiles_home` domain so an existing Home Assistant config entry can continue to be used. It adds a diagnostic request for Hoymiles inverter indicators (`type=6`) so the exact temperature field returned by the user's station can be identified before exposing it as a normal sensor.
+## custom.6
 
+- Reads the microinverter temperature from the S-Miles Home Protobuf chart endpoint.
+- Uses the official Hoymiles micro-inverter quota `MI_TEMPERATURE`.
+- Keeps the existing `Temperature` entity attached to the Hoymiles microinverter device.
+- Removes the temporary JSON indicator and microinverter-detail diagnostics used in earlier test builds.
+- Keeps the battery settings fix from the previous custom builds.
 
-## Custom additions
-
-- v0.3.0-custom.3: adds inverter internal temperature from Hoymiles indicator `inv_tin`, removes temporary warning log spam, and fixes battery settings exception handling.
-
-
-## Custom v4
-Adds the inverter internal temperature as an entity attached directly to the Hoymiles microinverter device, using the `inv_tin` indicator returned by Hoymiles type-6 telemetry.
-
-
-## Custom v5 diagnostic
-Adds temporary logging of the S-Miles Cloud microinverter list/detail endpoints to identify the real inverter temperature field for HMS/HM microinverters.
+Temperature is refreshed with the same chart interval as PV1–PV4 values.

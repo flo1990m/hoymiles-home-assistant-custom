@@ -151,51 +151,40 @@ class HoymilesHomeClient:
         )
         return self._unwrap(response) or {}
 
-    async def async_inverter_indicators(self, station_id: int) -> dict[str, Any]:
-        """Return raw inverter realtime indicators (Hoymiles indicator type 6)."""
+    async def async_microinverter_values(
+        self, station_id: int, device_ids: list[int], date: str
+    ) -> dict[str, float | None]:
+        """Return latest microinverter chart values, including temperature."""
         await self.async_ensure_login()
-        response = await self._json(
-            f"{DATA_BASE_URL}/pvm-data/api/0/indicators/data/select_real_indicators_data",
-            {"sid": station_id, "type": 6},
-        )
-        data = self._unwrap(response)
-        if isinstance(data, dict):
-            return data
-        return {"raw": data}
-
-    async def async_microinverter_details(self, station_id: int) -> list[dict[str, Any]]:
-        """Return microinverter list entries enriched with per-device detail."""
-        await self.async_ensure_login()
-        response = await self._json(
-            f"{DATA_BASE_URL}/pvm/api/0/dev/micro/select_by_station",
-            {
-                "sid": station_id,
-                "page_size": 1000,
-                "page_num": 1,
-                "show_warn": 0,
-            },
-        )
-        data = self._unwrap(response) or {}
-        items = data.get("list", []) if isinstance(data, dict) else []
-        if not isinstance(items, list):
-            return []
-
-        result: list[dict[str, Any]] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            device_id = item.get("id")
-            enriched = dict(item)
-            if isinstance(device_id, int):
-                detail_response = await self._json(
-                    f"{DATA_BASE_URL}/pvm/api/0/dev/micro/find",
-                    {"id": device_id, "sid": station_id},
-                )
-                detail = self._unwrap(detail_response)
-                if isinstance(detail, dict):
-                    enriched["detail"] = detail
-            result.append(enriched)
-        return result
+        if not device_ids:
+            return {}
+        try:
+            async with self._session.post(
+                f"{DATA_BASE_URL}/pvmc/api/0/micro_data/count_by_day_c",
+                json={
+                    "sid": station_id,
+                    "date": date,
+                    "mi_list": device_ids,
+                    "quota": [
+                        "MI_POWER",
+                        "MI_NET_V",
+                        "MI_NET_RATE",
+                        "MI_TEMPERATURE",
+                    ],
+                },
+                headers=self.headers,
+                timeout=ClientTimeout(total=30),
+                allow_redirects=False,
+            ) as response:
+                if 300 <= response.status < 400:
+                    raise HoymilesConnectionError("Hoymiles API redirected unexpectedly")
+                response.raise_for_status()
+                raw = await response.read()
+        except (ClientError, TimeoutError) as err:
+            raise HoymilesConnectionError(str(err)) from err
+        if raw.startswith(b"{"):
+            raise HoymilesConnectionError(raw.decode(errors="replace")[:500])
+        return latest_values(raw)
 
     async def _get_live_uri(self, station_id: int) -> str:
         response = await self._json(

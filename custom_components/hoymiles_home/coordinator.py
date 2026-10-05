@@ -56,8 +56,7 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.inverters: list[dict[str, Any]] = []
         self.modules: dict[int, dict[int, dict[str, float | None]]] = {}
         self.station: dict[str, Any] = {}
-        self.inverter_indicators: dict[str, Any] = {}
-        self.microinverter_details: list[dict[str, Any]] = []
+        self.inverter_values: dict[str, float | None] = {}
         self.battery_settings: dict[str, Any] = {
             "readable": False,
             "error": "not_yet_read",
@@ -281,33 +280,6 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 except HoymilesConnectionError as err:
                     _LOGGER.debug("Could not update station totals: %s", err)
 
-                try:
-                    self.inverter_indicators = (
-                        await self.client.async_inverter_indicators(self.station_id)
-                    )
-                except HoymilesAuthError:
-                    raise
-                except HoymilesConnectionError as err:
-                    _LOGGER.debug(
-                        "Could not update inverter indicators: %s",
-                        err,
-                    )
-
-                try:
-                    self.microinverter_details = (
-                        await self.client.async_microinverter_details(self.station_id)
-                    )
-                    _LOGGER.warning(
-                        "HOYMILES MICROINVERTER DETAILS: %s",
-                        self.microinverter_details,
-                    )
-                except HoymilesAuthError:
-                    raise
-                except HoymilesConnectionError as err:
-                    _LOGGER.warning(
-                        "Could not update microinverter details: %s",
-                        err,
-                    )
                 finally:
                     self._station_updated = now
 
@@ -320,6 +292,20 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             if now - self._modules_updated >= MODULE_INTERVAL:
                 chart_date = dt_util.now().date().isoformat()
+                inverter_ids = [
+                    inverter["id"]
+                    for inverter in self.inverters
+                    if isinstance(inverter.get("id"), int)
+                ]
+                try:
+                    self.inverter_values = await self.client.async_microinverter_values(
+                        self.station_id, inverter_ids, chart_date
+                    )
+                except HoymilesAuthError:
+                    raise
+                except HoymilesConnectionError as err:
+                    _LOGGER.debug("Could not update microinverter values: %s", err)
+
                 modules = {
                     inverter_id: dict(ports)
                     for inverter_id, ports in self.modules.items()
@@ -355,8 +341,7 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "device_tree": self.device_tree,
                 "inverters": self.inverters,
                 "modules": self.modules,
-                "inverter_indicators": self.inverter_indicators,
-                "microinverter_details": self.microinverter_details,
+                "inverter_values": self.inverter_values,
                 "battery_energy": battery_energy,
                 "battery_settings": self.battery_settings,
             }
