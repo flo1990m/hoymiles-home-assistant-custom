@@ -284,14 +284,10 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.inverter_indicators = (
                         await self.client.async_inverter_indicators(self.station_id)
                     )
-                    _LOGGER.warning(
-                        "HOYMILES INVERTER INDICATORS: %s",
-                        self.inverter_indicators,
-                    )
                 except HoymilesAuthError:
                     raise
                 except HoymilesConnectionError as err:
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Could not update inverter indicators: %s",
                         err,
                     )

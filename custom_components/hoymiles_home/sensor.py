@@ -19,6 +19,7 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfPower,
     UnitOfElectricPotential,
+    UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -53,6 +54,20 @@ def _station(key: str) -> Callable[[dict[str, Any]], Any]:
 
 def _calculated_energy(key: str) -> Callable[[dict[str, Any]], Any]:
     return lambda data: _number(data.get("battery_energy", {}).get(key))
+
+
+def _inverter_indicator(key: str) -> Callable[[dict[str, Any]], Any]:
+    """Return a numeric value from the inverter indicator list."""
+    def value_fn(data: dict[str, Any]) -> float | int | None:
+        indicators = data.get("inverter_indicators", {}).get("list", [])
+        if not isinstance(indicators, list):
+            return None
+        for item in indicators:
+            if isinstance(item, dict) and item.get("key") == key:
+                return _number(item.get("val"))
+        return None
+
+    return value_fn
 
 
 def _pv_power(data: dict[str, Any]) -> float | int | None:
@@ -248,6 +263,14 @@ STATION_SENSORS = (
             value_fn=lambda data, field=key: data.get("live", {}).get(field),
         )
         for key in ("ems", "brs", "chs", "bhs")
+    ),
+    HoymilesDescription(
+        key="inverter_temperature",
+        translation_key="inverter_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_inverter_indicator("inv_tin"),
     ),
     HoymilesDescription(
         key="today_energy",

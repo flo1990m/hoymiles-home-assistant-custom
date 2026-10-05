@@ -408,10 +408,10 @@ class HoymilesHomeClient:
         work_mode_error: HoymilesConnectionError | None = None
         try:
             return await self._async_work_mode_settings(station_id)
-        except HoymilesConnectionError as work_mode_error:
+        except HoymilesConnectionError as err:
             # Retain the older read path for devices/firmware that do not
             # implement the consumer app's command-83 work-mode protocol.
-            pass
+            work_mode_error = err
         station_payload = {
             "action": BATTERY_SETTINGS_ACTION,
             "data": {"sid": station_id},
