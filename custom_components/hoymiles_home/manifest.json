@@ -1,0 +1,12 @@
+{
+  "domain": "hoymiles_home",
+  "name": "Hoymiles S-Miles Home",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/flo1990m/hoymiles-home-assistant-custom",
+  "issue_tracker": "https://github.com/flo1990m/hoymiles-home-assistant-custom/issues",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "version": "0.3.0-custom.1",
+  "requirements": ["argon2-cffi==25.1.0"]
+}
