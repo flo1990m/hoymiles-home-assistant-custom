@@ -163,6 +163,40 @@ class HoymilesHomeClient:
             return data
         return {"raw": data}
 
+    async def async_microinverter_details(self, station_id: int) -> list[dict[str, Any]]:
+        """Return microinverter list entries enriched with per-device detail."""
+        await self.async_ensure_login()
+        response = await self._json(
+            f"{DATA_BASE_URL}/pvm/api/0/dev/micro/select_by_station",
+            {
+                "sid": station_id,
+                "page_size": 1000,
+                "page_num": 1,
+                "show_warn": 0,
+            },
+        )
+        data = self._unwrap(response) or {}
+        items = data.get("list", []) if isinstance(data, dict) else []
+        if not isinstance(items, list):
+            return []
+
+        result: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            device_id = item.get("id")
+            enriched = dict(item)
+            if isinstance(device_id, int):
+                detail_response = await self._json(
+                    f"{DATA_BASE_URL}/pvm/api/0/dev/micro/find",
+                    {"id": device_id, "sid": station_id},
+                )
+                detail = self._unwrap(detail_response)
+                if isinstance(detail, dict):
+                    enriched["detail"] = detail
+            result.append(enriched)
+        return result
+
     async def _get_live_uri(self, station_id: int) -> str:
         response = await self._json(
             f"{DATA_BASE_URL}/pvmc/api/0/station/get_sd_uri_c", {"sid": station_id}

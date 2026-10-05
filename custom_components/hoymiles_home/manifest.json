@@ -7,6 +7,6 @@
   "issue_tracker": "https://github.com/flo1990m/hoymiles-home-assistant-custom/issues",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "version": "0.3.0-custom.4",
+  "version": "0.3.0-custom.5",
   "requirements": ["argon2-cffi==25.1.0"]
 }
