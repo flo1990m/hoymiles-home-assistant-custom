@@ -8,3 +8,7 @@ This repository keeps the original `hoymiles_home` domain so an existing Home As
 ## Custom additions
 
 - v0.3.0-custom.3: adds inverter internal temperature from Hoymiles indicator `inv_tin`, removes temporary warning log spam, and fixes battery settings exception handling.
+
+
+## Custom v4
+Adds the inverter internal temperature as an entity attached directly to the Hoymiles microinverter device, using the `inv_tin` indicator returned by Hoymiles type-6 telemetry.

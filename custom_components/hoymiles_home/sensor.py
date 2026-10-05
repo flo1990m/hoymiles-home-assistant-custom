@@ -265,14 +265,6 @@ STATION_SENSORS = (
         for key in ("ems", "brs", "chs", "bhs")
     ),
     HoymilesDescription(
-        key="inverter_temperature",
-        translation_key="inverter_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        value_fn=_inverter_indicator("inv_tin"),
-    ),
-    HoymilesDescription(
         key="today_energy",
         translation_key="today_energy",
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
@@ -331,6 +323,7 @@ async def async_setup_entry(
         for description in STATION_SENSORS
     ]
     for inverter in coordinator.inverters:
+        entities.append(HoymilesInverterTemperatureSensor(coordinator, entry, inverter))
         for port in range(1, 5):
             for key, quota, unit, device_class in MODULE_SENSORS:
                 entities.append(
@@ -374,6 +367,36 @@ class HoymilesStationSensor(CoordinatorEntity[HoymilesHomeCoordinator], SensorEn
         if self.entity_description.attributes_fn is None:
             return None
         return self.entity_description.attributes_fn(self.coordinator.data or {})
+
+
+class HoymilesInverterTemperatureSensor(
+    CoordinatorEntity[HoymilesHomeCoordinator], SensorEntity
+):
+    """Internal temperature reported for the Hoymiles microinverter."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Temperature"
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, entry, inverter: dict[str, Any]) -> None:
+        super().__init__(coordinator)
+        self._inverter_id = inverter["id"]
+        # Keep the temperature tied to the microinverter and use a stable unique ID.
+        self._attr_unique_id = f"{entry.entry_id}_{self._inverter_id}_temperature"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"inverter_{self._inverter_id}")},
+            manufacturer="Hoymiles",
+            name="Hoymiles microinverter",
+            model="HMS-2000-4WB",
+            serial_number=inverter.get("sn"),
+            via_device=(DOMAIN, f"station_{entry.data[CONF_STATION_ID]}"),
+        )
+
+    @property
+    def native_value(self):
+        return _inverter_indicator("inv_tin")(self.coordinator.data or {})
 
 
 class HoymilesModuleSensor(CoordinatorEntity[HoymilesHomeCoordinator], SensorEntity):
