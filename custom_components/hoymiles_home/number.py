@@ -2,7 +2,7 @@
 from __future__ import annotations
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, PERCENTAGE
+from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -14,7 +14,7 @@ from .coordinator import HoymilesHomeCoordinator
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     coordinator: HoymilesHomeCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([HoymilesBatteryReserveSocNumber(coordinator, entry)])
+    async_add_entities([HoymilesBatteryReserveSocNumber(coordinator, entry), HoymilesPowerLimitNumber(coordinator, entry)])
 
 class HoymilesBatteryReserveSocNumber(CoordinatorEntity[HoymilesHomeCoordinator], NumberEntity):
     _attr_has_entity_name = True
@@ -45,3 +45,41 @@ class HoymilesBatteryReserveSocNumber(CoordinatorEntity[HoymilesHomeCoordinator]
             await self.coordinator.async_set_battery_reserve_soc(round(value))
         except HoymilesError as err:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="battery_setting_write_failed", translation_placeholders={"error": str(err)}) from err
+
+class HoymilesPowerLimitNumber(CoordinatorEntity[HoymilesHomeCoordinator], NumberEntity):
+    """User-adjustable power limit using the validated station cloud API."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Limitation de puissance"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_native_min_value = 100
+    _attr_native_max_value = 2000
+    _attr_native_step = 1
+    _attr_icon = "mdi:solar-power-variant"
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator)
+        station_id = entry.data[CONF_STATION_ID]
+        self._attr_unique_id = f"{entry.entry_id}_power_limit_control"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"station_{station_id}")},
+            manufacturer="Hoymiles",
+            name=f"S-Miles Home {station_id}",
+            model="S-Miles Home station",
+        )
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.power_limit is not None
+
+    @property
+    def native_value(self) -> float | None:
+        current = self.coordinator.power_limit
+        return float(current["power"]) if current is not None else None
+
+    async def async_set_native_value(self, value: float) -> None:
+        try:
+            await self.coordinator.async_set_power_limit(round(value))
+        except HoymilesError as err:
+            raise HomeAssistantError(str(err)) from err
