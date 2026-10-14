@@ -34,6 +34,7 @@ from .const import (
     TOKEN_LIFETIME,
     USER_AGENT,
     WORK_MODE_SETTINGS_ACTION,
+    POWER_LIMIT_ACTION,
 )
 from .protobuf import latest_values
 from .security import trusted_hoymiles_url
@@ -298,6 +299,46 @@ class HoymilesHomeClient:
                 continue
             return status
         raise HoymilesConnectionError("Work mode request timed out")
+
+
+    async def async_read_power_limit(self, station_id: int) -> dict[str, int]:
+        """Read real inverter output limit through verified action 84."""
+        await self.async_ensure_login()
+        response = await self._json(
+            STATION_SETTING_READ_URL,
+            {"action": POWER_LIMIT_ACTION, "data": {"sid": station_id}},
+        )
+        job_id = self._unwrap(response)
+        if not isinstance(job_id, (str, int)):
+            raise HoymilesConnectionError("Power limit read returned no command ID")
+        status = await self._async_poll_station_setting_job(str(job_id))
+        if status.get("code") != 0 or not isinstance(status.get("data"), dict):
+            raise HoymilesConnectionError("Power limit read was not confirmed")
+        try:
+            power = int(status["data"]["power"])
+            maximum = int(status["data"]["max_power"])
+        except (KeyError, TypeError, ValueError) as err:
+            raise HoymilesConnectionError("Invalid power limit response") from err
+        if not 0 < power <= maximum or maximum < 100:
+            raise HoymilesConnectionError("Out of range power limit response")
+        return {"power": power, "max_power": maximum}
+
+    async def async_write_power_limit(self, station_id: int, power: int) -> None:
+        """Write action 84, then await successful command completion."""
+        await self.async_ensure_login()
+        response = await self._json(
+            STATION_SETTING_WRITE_URL,
+            {"action": POWER_LIMIT_ACTION,
+             "data": {"sid": station_id, "power": power}},
+        )
+        job_id = self._unwrap(response)
+        if not isinstance(job_id, (str, int)):
+            raise HoymilesConnectionError("Power limit write returned no command ID")
+        status = await self._async_poll_station_setting_job(str(job_id))
+        if status.get("code") != 0:
+            raise HoymilesConnectionError(
+                str(status.get("message") or "Power limit write was not confirmed")
+            )
 
     async def _async_work_mode_settings(self, station_id: int) -> dict[str, Any]:
         """Read the real Eigenverbrauch settings exactly as the Home app does."""

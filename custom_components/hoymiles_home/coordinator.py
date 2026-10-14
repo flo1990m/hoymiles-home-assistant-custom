@@ -29,6 +29,7 @@ from .const import (
     LIVE_MIN_INTERVAL,
     MAX_ENERGY_SAMPLE_GAP,
     MODULE_INTERVAL,
+    POWER_LIMIT_REFRESH_INTERVAL,
     STATION_INTERVAL,
     STORAGE_VERSION,
 )
@@ -80,6 +81,9 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_load_sample: datetime | None = None
         self._next_energy_save = datetime.min.replace(tzinfo=UTC)
         self._battery_settings_lock = asyncio.Lock()
+        self._power_limit_lock = asyncio.Lock()
+        self.power_limit: dict[str, int] | None = None
+        self._power_limit_updated = datetime.min.replace(tzinfo=UTC)
 
     async def async_initialize(self) -> None:
         """Restore today's calculated battery energy."""
@@ -126,6 +130,41 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "error": str(err),
             }
             _LOGGER.debug("Could not read battery settings: %s", err)
+
+
+    async def _async_refresh_power_limit(self) -> None:
+        """Update limit without blocking frequent production telemetry."""
+        async with self._power_limit_lock:
+            try:
+                self.power_limit = await self.client.async_read_power_limit(
+                    self.station_id
+                )
+            except (HoymilesAuthError, HoymilesConnectionError) as err:
+                _LOGGER.debug("Cannot read power limit: %s", err)
+                self.power_limit = None
+            if self.data is not None:
+                self.async_set_updated_data({**self.data, "power_limit": self.power_limit})
+
+    async def async_set_power_limit(self, power: int) -> None:
+        """Serialize writes and confirm the actual setting by reading it back."""
+        async with self._power_limit_lock:
+            current = self.power_limit
+            if current is None:
+                current = await self.client.async_read_power_limit(self.station_id)
+            if not 100 <= power <= min(2000, current["max_power"]):
+                raise HoymilesConnectionError("Power limit outside 100–2000 W")
+            if current["power"] == power:
+                return
+            await self.client.async_write_power_limit(self.station_id, power)
+            verified = await self.client.async_read_power_limit(self.station_id)
+            if verified["power"] != power:
+                raise HoymilesConnectionError(
+                    f"Power limit readback differs: {verified['power']} W"
+                )
+            self.power_limit = verified
+            self._power_limit_updated = datetime.now(UTC)
+            if self.data is not None:
+                self.async_set_updated_data({**self.data, "power_limit": verified})
 
     def _update_battery_energy(
         self, live: dict[str, Any], now: datetime
@@ -283,6 +322,12 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 finally:
                     self._station_updated = now
 
+            if now - self._power_limit_updated >= POWER_LIMIT_REFRESH_INTERVAL:
+                self._power_limit_updated = now
+                self.hass.async_create_task(
+                    self._async_refresh_power_limit(), f"{DOMAIN} power limit"
+                )
+
             if now - self._battery_settings_updated >= BATTERY_SETTINGS_INTERVAL:
                 self._battery_settings_updated = now
                 self.hass.async_create_task(
@@ -344,6 +389,7 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "inverter_values": self.inverter_values,
                 "battery_energy": battery_energy,
                 "battery_settings": self.battery_settings,
+                "power_limit": self.power_limit,
             }
         except HoymilesAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
