@@ -23,6 +23,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -304,12 +305,20 @@ async def async_setup_entry(
 ) -> None:
     """Set up sensor entities."""
     coordinator: HoymilesHomeCoordinator = hass.data[DOMAIN][entry.entry_id]
+    station_id = entry.data[CONF_STATION_ID]
+    station_device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"station_{station_id}")},
+        manufacturer="Hoymiles",
+        name=f"S-Miles Home {station_id}",
+        model="S-Miles Home station",
+    )
     entities: list[SensorEntity] = [
         HoymilesStationSensor(coordinator, entry, description)
         for description in STATION_SENSORS
     ]
     for inverter in coordinator.inverters:
-        entities.append(HoymilesInverterTemperatureSensor(coordinator, entry, inverter))
+        entities.append(HoymilesInverterTemperatureSensor(coordinator, entry, inverter, station_device.id))
         for port in range(1, 5):
             for key, quota, unit, device_class in MODULE_SENSORS:
                 entities.append(
@@ -322,6 +331,7 @@ async def async_setup_entry(
                         quota,
                         unit,
                         device_class,
+                        station_device.id,
                     )
                 )
     async_add_entities(entities)
@@ -366,7 +376,7 @@ class HoymilesInverterTemperatureSensor(
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, entry, inverter: dict[str, Any]) -> None:
+    def __init__(self, coordinator, entry, inverter: dict[str, Any], via_device_id: str) -> None:
         super().__init__(coordinator)
         self._inverter_id = inverter["id"]
         # Keep the temperature tied to the microinverter and use a stable unique ID.
@@ -377,7 +387,7 @@ class HoymilesInverterTemperatureSensor(
             name="Hoymiles microinverter",
             model="HMS-2000-4WB",
             serial_number=inverter.get("sn"),
-            via_device=(DOMAIN, f"station_{entry.data[CONF_STATION_ID]}"),
+            via_device_id=via_device_id,
         )
 
     @property
@@ -405,6 +415,7 @@ class HoymilesModuleSensor(CoordinatorEntity[HoymilesHomeCoordinator], SensorEnt
         quota: str,
         unit,
         device_class,
+        via_device_id: str,
     ) -> None:
         super().__init__(coordinator)
         self._inverter_id = inverter["id"]
@@ -421,7 +432,7 @@ class HoymilesModuleSensor(CoordinatorEntity[HoymilesHomeCoordinator], SensorEnt
             name="Hoymiles microinverter",
             model="HMS-2000-4WB",
             serial_number=inverter.get("sn"),
-            via_device=(DOMAIN, f"station_{entry.data[CONF_STATION_ID]}"),
+            via_device_id=via_device_id,
         )
 
     @property
