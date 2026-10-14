@@ -104,6 +104,11 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 setattr(self, attribute, max(float(value), 0.0))
 
+    async def async_initialize_power_limit(self) -> None:
+        """Read the power limit once at startup so it is immediately available."""
+        await self._async_refresh_power_limit()
+        self._power_limit_updated = datetime.now(UTC)
+
     def _energy_store_data(self) -> dict[str, Any]:
         return {
             "calculation_version": BATTERY_ENERGY_CALCULATION_VERSION,
