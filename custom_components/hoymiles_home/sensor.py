@@ -391,6 +391,14 @@ class HoymilesInverterTemperatureSensor(
         )
 
     @property
+    def available(self) -> bool:
+        return (
+            super().available
+            and not self.coordinator._sleeping
+            and self.native_value is not None
+        )
+
+    @property
     def native_value(self):
         return _number(
             (self.coordinator.data or {})
