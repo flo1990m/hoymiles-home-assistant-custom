@@ -83,10 +83,26 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._battery_settings_lock = asyncio.Lock()
         self._power_limit_lock = asyncio.Lock()
         self.power_limit: dict[str, int] | None = None
+        self._power_limit_online = False
+        self._sleeping = False
+        self._power_limit_store: Store[dict[str, Any]] = Store(
+            hass, STORAGE_VERSION, f"{DOMAIN}.{station_id}.power_limit"
+        )
         self._power_limit_updated = datetime.min.replace(tzinfo=UTC)
 
     async def async_initialize(self) -> None:
-        """Restore today's calculated battery energy."""
+        """Restore stored power limit and today's calculated battery energy."""
+        saved_limit = await self._power_limit_store.async_load()
+        if isinstance(saved_limit, dict):
+            power = saved_limit.get("power")
+            maximum = saved_limit.get("max_power")
+            if (
+                type(power) is int
+                and type(maximum) is int
+                and 100 <= power <= maximum
+                and maximum >= 100
+            ):
+                self.power_limit = {"power": power, "max_power": maximum}
         stored = await self._energy_store.async_load()
         if (
             not isinstance(stored, dict)
@@ -141,18 +157,24 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Update limit without blocking frequent production telemetry."""
         async with self._power_limit_lock:
             try:
-                self.power_limit = await self.client.async_read_power_limit(
-                    self.station_id
-                )
+                fresh = await self.client.async_read_power_limit(self.station_id)
+                self.power_limit = fresh
+                self._power_limit_online = True
+                self._power_limit_store.async_delay_save(lambda: fresh, 5)
             except (HoymilesAuthError, HoymilesConnectionError) as err:
                 _LOGGER.debug("Cannot read power limit: %s", err)
-                self.power_limit = None
+                self._power_limit_online = False
+                # Keep the last confirmed setpoint visible while offline.
             if self.data is not None:
                 self.async_set_updated_data({**self.data, "power_limit": self.power_limit})
 
     async def async_set_power_limit(self, power: int) -> None:
         """Serialize writes and confirm the actual setting by reading it back."""
         async with self._power_limit_lock:
+            if not self._power_limit_online:
+                raise HoymilesConnectionError(
+                    "Power limit cannot be changed while inverter is offline"
+                )
             current = self.power_limit
             if current is None:
                 current = await self.client.async_read_power_limit(self.station_id)
@@ -167,6 +189,7 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     f"Power limit readback differs: {verified['power']} W"
                 )
             self.power_limit = verified
+            self._power_limit_store.async_delay_save(lambda: verified, 5)
             self._power_limit_updated = datetime.now(UTC)
             if self.data is not None:
                 self.async_set_updated_data({**self.data, "power_limit": verified})
@@ -319,6 +342,14 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 # Restore the normal polling cadence after nighttime sleep.
                 self.update_interval = LIVE_MIN_INTERVAL
+            self._sleeping = (
+                live.get("power", {}).get("pv2") == 0
+                and live.get("power", {}).get("pv") == 0
+                and "dly" not in live
+            )
+            if self._sleeping:
+                # Day-chart temperature values are not live readings at night.
+                self.inverter_values = {}
             now = datetime.now(UTC)
             battery_energy = self._update_battery_energy(live, now)
             delay_ms = live.get("dly")
@@ -358,7 +389,7 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     f"{DOMAIN} battery settings",
                 )
 
-            if now - self._modules_updated >= MODULE_INTERVAL:
+            if not self._sleeping and now - self._modules_updated >= MODULE_INTERVAL:
                 chart_date = dt_util.now().date().isoformat()
                 inverter_ids = [
                     inverter["id"]
