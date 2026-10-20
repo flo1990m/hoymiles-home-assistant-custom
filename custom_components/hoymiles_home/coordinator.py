@@ -300,7 +300,25 @@ class HoymilesHomeCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
-            live = await self.client.async_live(self.station_id)
+            try:
+                live = await self.client.async_live(self.station_id)
+            except HoymilesConnectionError as err:
+                # The Hoymiles live endpoint can omit its URI while the
+                # microinverter sleeps at night. This is not a failed poll.
+                # Other API failures, and missing URIs in daylight, must
+                # still be reported by the coordinator.
+                sun = self.hass.states.get("sun.sun")
+                if (
+                    str(err) != "Live API returned no URI"
+                    or sun is None
+                    or sun.state != "below_horizon"
+                ):
+                    raise
+                live = {"power": {"pv": 0, "pv2": 0}}
+                self.update_interval = timedelta(minutes=1)
+            else:
+                # Restore the normal polling cadence after nighttime sleep.
+                self.update_interval = LIVE_MIN_INTERVAL
             now = datetime.now(UTC)
             battery_energy = self._update_battery_energy(live, now)
             delay_ms = live.get("dly")
