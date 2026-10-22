@@ -14,7 +14,7 @@ Intégration personnalisée Home Assistant utilisant le cloud **Hoymiles S-Miles
 - **Lecture au démarrage** : l'intégration interroge la consigne initiale avant de créer les entités. L'entité peut rester temporairement indisponible en cas de problème réseau ou cloud.
 - **Température interne du micro-onduleur** à partir du quota `MI_TEMPERATURE` de l'API Protobuf Hoymiles.
 - **Production photovoltaïque en temps réel** et informations de la station conservées depuis l'intégration d'origine.
-- **Puissance, tension et courant par entrée PV** (PV1 à PV4) depuis les données de graphique Hoymiles ; actualisation demandée toutes les 5 minutes, les valeurs fournies par le cloud pouvant avoir du retard.
+- **Puissance, tension et courant par entrée PV** (PV1 à PV4) depuis les données de graphique Hoymiles ; interrogation Home Assistant toutes les **1 minute** au lieu de 5 minutes. La fréquence réelle de changement reste dépendante des données fournies par le cloud.
 - Les autres fonctionnalités existantes de l'intégration d'origine sont préservées, notamment ses capteurs et fonctions de batterie lorsque les équipements et les données correspondants sont disponibles.
 
 ### Exemple d'entités sur l'installation testée
@@ -56,6 +56,7 @@ La limitation réduit aussi la puissance DC réellement extraite des panneaux : 
 
 ## Versions personnalisées
 
+- **`0.4.1`** : interrogation des valeurs PV1 à PV4 toutes les minutes au lieu de toutes les 5 minutes ; la fraîcheur réelle dépend toujours du cloud Hoymiles.
 - **`0.3.0-custom.8`** : lecture initiale de la limitation au démarrage pour éviter une valeur indisponible jusqu'au prochain rafraîchissement.
 - **`0.3.0-custom.7`** : ajout de la lecture et de l'écriture de la limitation de puissance en watts, contrôlées par l'action cloud 84, avec confirmation, relecture et entité `number`.
 - **`0.3.0-custom.6`** : remontée de la température de micro-onduleur depuis le quota Protobuf `MI_TEMPERATURE`, en conservant les capteurs existants et les corrections de batterie.
