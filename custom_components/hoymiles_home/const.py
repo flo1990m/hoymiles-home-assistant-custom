@@ -15,7 +15,7 @@ STATION_SETTING_READ_URL = f"{DATA_BASE_URL}/pvmc/api/0/station_ctl/read_c"
 STATION_SETTING_WRITE_URL = f"{DATA_BASE_URL}/pvmc/api/0/station_ctl/write_c"
 STATION_SETTING_STATUS_URL = f"{DATA_BASE_URL}/pvmc/api/0/station_ctl/setting_status_c"
 LIVE_MIN_INTERVAL = timedelta(seconds=3)
-MODULE_INTERVAL = timedelta(minutes=1)
+MODULE_INTERVAL = timedelta(minutes=5)
 STATION_INTERVAL = timedelta(minutes=1)
 BATTERY_SETTINGS_INTERVAL = timedelta(minutes=30)
 TOKEN_LIFETIME = timedelta(minutes=90)
