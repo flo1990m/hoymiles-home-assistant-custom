@@ -56,6 +56,8 @@ La limitation réduit aussi la puissance DC réellement extraite des panneaux : 
 
 ## Versions personnalisées
 
+- **`0.4.2`** : version corrective après la `0.4.1` ; rétablit l'intervalle de rafraîchissement demandé des données PV1 à PV4 à 5 minutes. Le passage à 1 minute ne force pas le cloud Hoymiles à fournir des mesures plus récentes.
+
 - **`0.3.0-custom.8`** : lecture initiale de la limitation au démarrage pour éviter une valeur indisponible jusqu'au prochain rafraîchissement.
 - **`0.3.0-custom.7`** : ajout de la lecture et de l'écriture de la limitation de puissance en watts, contrôlées par l'action cloud 84, avec confirmation, relecture et entité `number`.
 - **`0.3.0-custom.6`** : remontée de la température de micro-onduleur depuis le quota Protobuf `MI_TEMPERATURE`, en conservant les capteurs existants et les corrections de batterie.
